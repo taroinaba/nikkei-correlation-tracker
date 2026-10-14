@@ -1,0 +1,2036 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日経連動性トラッカー</title>
+<style>
+/* ── VARIABLES ──────────────────────────────────── */
+:root {
+  --bg:#f3f5f8;--panel:#fff;--border:#dde2ea;--border2:#b8c0cc;
+  --text:#1b2333;--muted:#6b7a8f;--faint:#a8b4c0;
+  --blue:#2563eb;--blue-dim:#eff6ff;--blue-dk:#1d4ed8;
+  --green:#16a34a;--red:#dc2626;--red-dim:#fff5f5;--orange:#ea580c;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans JP',sans-serif;
+  --mono:'SF Mono','Fira Code',Consolas,monospace;
+  --r:8px;--sh:0 1px 3px rgba(0,0,0,.08);--sh-lg:0 8px 24px rgba(0,0,0,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+
+/* ── HEADER ─────────────────────────────────────── */
+.app-header{background:var(--panel);border-bottom:1px solid var(--border);
+  padding:10px 18px;display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:8px;position:sticky;top:0;z-index:200;box-shadow:var(--sh)}
+.app-title{font-size:15px;font-weight:800;letter-spacing:.02em}
+.hdr-btns{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ── BUTTONS ─────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:6px;
+  border:1px solid var(--border2);background:var(--panel);color:var(--text);
+  font-size:12px;font-weight:600;cursor:pointer;transition:background .1s;
+  white-space:nowrap;font-family:var(--sans)}
+.btn:hover{background:#edf1f7}
+.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue-dk)}
+.btn-primary:hover{background:var(--blue-dk)}
+.btn-sm{padding:4px 9px;font-size:11px}
+.btn-danger{border-color:#fca5a5;color:var(--red)}
+.btn-danger:hover{background:var(--red-dim)}
+.btn-icon{padding:4px 7px;font-size:13px}
+
+/* ── TAB NAV ─────────────────────────────────────── */
+.tab-nav{display:flex;gap:0;border-bottom:2px solid var(--border);
+  background:var(--panel);padding:0 18px}
+.tab-btn{padding:10px 18px;border:none;background:transparent;color:var(--muted);
+  font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;
+  margin-bottom:-2px;transition:color .12s,border-color .12s;font-family:var(--sans)}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue)}
+.tab-btn:hover:not(.active){color:var(--text)}
+
+/* ── TAB PANELS ─────────────────────────────────── */
+.tab-panel{display:none;padding:18px;max-width:1100px;margin:0 auto}
+.tab-panel.active{display:block}
+/* 閲覧タブのみ画面幅いっぱいに広げる（他タブの max-width は変更しない） */
+#tab-view{max-width:none}
+
+/* ── FORM ELEMENTS ──────────────────────────────── */
+.field{margin-bottom:12px}
+.label{display:block;font-size:11px;font-weight:700;color:var(--muted);
+  letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px}
+input[type=text],input[type=date],select,textarea{
+  width:100%;padding:8px 10px;border:1.5px solid var(--border2);border-radius:6px;
+  background:var(--panel);color:var(--text);font-family:var(--sans);font-size:13px;
+  outline:none;transition:border-color .13s}
+input[type=text]:focus,input[type=date]:focus,select:focus,textarea:focus{border-color:var(--blue)}
+textarea{resize:vertical;line-height:1.55}
+input[type=number]{width:80px;padding:6px 8px;border:1.5px solid var(--border2);
+  border-radius:5px;background:var(--panel);font-family:var(--mono);font-size:13px;
+  font-weight:700;text-align:center;outline:none;color:var(--text)}
+input[type=number]:focus{border-color:var(--blue)}
+input.score-invalid{border-color:var(--red)!important;background:var(--red-dim)}
+.search-input{max-width:320px}
+
+/* ── CARD / SECTION ─────────────────────────────── */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);
+  padding:16px;margin-bottom:14px;box-shadow:var(--sh)}
+.section-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px}
+
+/* ── TABLES ─────────────────────────────────────── */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th,.tbl td{padding:7px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
+.tbl th{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;
+  text-transform:uppercase;background:#f8f9fc}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:#f8f9fc}
+.tbl td.code-cell{font-family:var(--mono);font-weight:700;font-size:12px;color:var(--blue);width:70px}
+.tbl tr.stock-row-hidden td{opacity:.45}
+
+/* ── VIEW TABLE ──────────────────────────────────── */
+.view-scroll{overflow-x:auto;overflow-y:auto;max-height:65vh;border:1px solid var(--border);border-radius:var(--r)}
+.view-tbl{border-collapse:collapse;font-size:12px;white-space:nowrap;line-height:1.25}
+.view-tbl th,.view-tbl td{padding:3px 7px;border-bottom:1px solid #eee}
+.view-tbl th{background:#f0f4f9;font-size:11px;font-weight:700;color:var(--muted);position:sticky;top:0;z-index:1}
+.view-tbl th.col-stock{width:200px;min-width:200px;max-width:200px;position:sticky;left:0;z-index:3;background:#e8edf5;text-align:left}
+.view-tbl td.col-stock{width:200px;min-width:200px;max-width:200px;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;z-index:2;background:var(--panel)}
+.view-tbl td.col-stock:hover{background:#f5f7fa}
+.stock-cell-code{font-family:var(--mono);font-size:11px;color:#999}
+.stock-cell-name{font-size:12px;font-weight:normal}
+.fetch-target-cb{margin-right:4px;vertical-align:middle;cursor:pointer}
+.view-tbl td.score-cell{text-align:center;font-family:var(--mono);font-weight:700;min-width:40px;position:relative}
+/* Score color bands（スコア値ごとの色分け。数値は表示せず色のみで示す） */
+.sc-v50{background:#b91c1c;color:#fff}
+.sc-v45{background:#dc2626;color:#fff}
+.sc-v40{background:#ef4444;color:#fff}
+.sc-v35{background:#f97316;color:#7c2d12}
+.sc-v30{background:#fb923c;color:#7c2d12}
+.sc-v25{background:#fbbf24;color:#78350f}
+.sc-v20{background:#fde68a;color:#78350f}
+.sc-v15{background:#fef3c7;color:#78350f}
+.sc-v10{background:#dbeafe;color:var(--text)}
+.sc-v5{background:#93c5fd;color:#1e3a8a}
+.sc-v0{background:#2563eb;color:#fff}
+/* 手動データありのセルに右上ドット表示（値は示さず、有無のみ。詳細はツールチップ） */
+.score-cell.has-manual::after{
+  content:'';
+  position:absolute;
+  top:3px;
+  right:3px;
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:#fff;
+  box-shadow:0 0 1px rgba(0,0,0,.5);
+}
+/* ストップ高安セル：通常の色分けを適用せず、目立たない背景にテキスト表示 */
+.score-cell.score-cell-limit{background:#f3f4f6;color:#374151;font-size:10px}
+
+/* Score legend */
+.score-legend{margin-bottom:12px}
+.score-legend-row{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;max-width:460px}
+.score-legend-cell{flex:1;text-align:center;font-size:11px;font-family:var(--mono);font-weight:700;padding:4px 0}
+.score-legend-labels{display:flex;justify-content:space-between;max-width:460px;font-size:11px;color:var(--muted);margin-top:3px}
+
+/* ── FILTER BAR ──────────────────────────────────── */
+.filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.filter-bar label{font-size:12px;font-weight:600;color:var(--muted)}
+.range-btns{display:flex;gap:4px}
+.range-btn{padding:5px 10px;border:1px solid var(--border2);border-radius:20px;
+  background:var(--panel);font-size:12px;font-weight:600;color:var(--muted);
+  cursor:pointer;transition:all .1s;font-family:var(--sans)}
+.range-btn.active{background:var(--blue);color:#fff;border-color:var(--blue-dk)}
+.custom-range{display:none;gap:6px;align-items:center}
+.custom-range.show{display:flex}
+.custom-range input[type=date]{width:140px}
+
+/* ── MODAL ───────────────────────────────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;
+  display:flex;align-items:center;justify-content:center;padding:16px;
+  opacity:0;pointer-events:none;transition:opacity .16s}
+.modal-overlay.open{opacity:1;pointer-events:auto}
+.modal{background:var(--panel);border-radius:12px;width:100%;max-width:460px;
+  max-height:85vh;overflow-y:auto;box-shadow:var(--sh-lg);
+  transform:translateY(8px);transition:transform .16s}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px 12px;border-bottom:1px solid var(--border)}
+.modal-title{font-size:15px;font-weight:700}
+.modal-close{width:28px;height:28px;border-radius:6px;border:none;
+  background:transparent;color:var(--muted);font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.modal-close:hover{background:#edf1f7}
+.modal-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;
+  padding:10px 18px 14px;border-top:1px solid var(--border)}
+
+/* ── INLINE ADD FORM ─────────────────────────────── */
+.add-form{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.add-form .field{margin:0;flex:1;min-width:120px}
+.add-form input{width:100%}
+.import-area{margin-top:12px}
+
+/* ── TOAST ───────────────────────────────────────── */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(14px);
+  background:#2d3748;color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;
+  font-weight:600;z-index:900;opacity:0;transition:all .2s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── MISC ────────────────────────────────────────── */
+.inline{display:inline}
+.muted{color:var(--muted);font-size:12px}
+.err{color:var(--red);font-size:12px}
+.gap-row{display:flex;gap:8px;align-items:center}
+.info-box{background:var(--blue-dim);border:1px solid #bfdbfe;border-radius:6px;
+  padding:10px 12px;font-size:12px;color:#1e40af;margin-bottom:12px}
+@media(max-width:520px){
+  .tab-btn{padding:8px 10px;font-size:12px}
+  .tab-panel{padding:12px}
+  .view-tbl td.col-stock,.view-tbl th.col-stock{width:160px;min-width:160px;max-width:160px}
+  #score-scroll{height:calc(100vh - 220px)}
+}
+
+/* ── 閲覧タブ：セルインライン編集 ─────────────────── */
+.view-tbl th.date-hdr{cursor:pointer}
+.view-tbl th.date-hdr:hover{background:#dce6f0}
+.view-tbl td.score-cell{cursor:pointer}
+.score-cell.sc-editing{background:#eff6ff!important;padding:2px 3px!important}
+.cell-edit-wrap{display:inline-flex;align-items:center;gap:2px}
+.cell-edit-input{width:50px;padding:1px 3px;font-size:11px;border:1px solid var(--blue);
+  border-radius:3px;text-align:center;font-family:var(--mono)}
+.cell-edit-input.invalid{border-color:var(--red)!important;background:#fee2e2}
+.cell-edit-btn{width:20px;height:20px;border:none;border-radius:3px;cursor:pointer;
+  font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.cell-edit-ok{background:#16a34a;color:#fff}
+.cell-edit-ok:hover{background:#15803d}
+.cell-edit-del{background:#dc2626;color:#fff}
+.cell-edit-del:hover{background:#b91c1c}
+.cell-edit-limit{width:26px;font-size:9px;background:#e5e7eb;color:#374151}
+.cell-edit-limit:hover{background:#d1d5db}
+
+/* ── 閲覧タブ：日付編集モーダル ─────────────────── */
+.date-edit-list{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.date-edit-row{display:flex;align-items:center;gap:8px;padding:5px 0;
+  border-bottom:1px solid var(--border)}
+.date-edit-row:last-child{border-bottom:none}
+.date-edit-row.deleted{opacity:.4}
+.date-edit-row.deleted .date-edit-name{text-decoration:line-through}
+.date-edit-name{flex:1;font-size:13px;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.date-edit-score{width:70px;padding:4px 6px;font-size:13px;
+  border:1px solid var(--border);border-radius:4px;text-align:center;font-family:var(--mono)}
+.date-edit-score.invalid{border-color:var(--red);background:#fee2e2}
+.date-edit-select{flex:1;font-size:12px;padding:4px 5px;
+  border:1px solid var(--border);border-radius:4px;min-width:0}
+.date-edit-del-btn{width:28px;height:28px;border:none;border-radius:5px;cursor:pointer;
+  font-size:14px;font-weight:700;flex-shrink:0;
+  display:inline-flex;align-items:center;justify-content:center}
+.date-edit-del-btn.mark-del{background:#fee2e2;color:#dc2626}
+.date-edit-del-btn.mark-del:hover{background:#fecaca}
+.date-edit-del-btn.restore{background:#dcfce7;color:#16a34a}
+.date-edit-del-btn.restore:hover{background:#bbf7d0}
+
+/* ── 閲覧タブ：日付ヘッダ（日付・曜日・終値の3行。前日比はツールチップ） ─── */
+.view-tbl th.date-hdr{line-height:1.25;padding:3px 1px;vertical-align:bottom}
+#band-toggle-btn.active{background:var(--blue);color:#fff;border-color:var(--blue-dk)}
+
+/* ── 閲覧タブ：日付列を固定幅44pxに統一（.score-grid = メインのスコア表のみ。日経帯テーブルは対象外） ─── */
+.view-tbl.score-grid{table-layout:fixed;width:max-content}
+.view-tbl.score-grid th.date-hdr,
+.view-tbl.score-grid td.score-cell{width:44px;min-width:44px;max-width:44px;padding-left:1px;padding-right:1px}
+.view-tbl.score-grid th.date-hdr > div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── 閲覧タブ：表エリアを画面下部まで拡張 ─────────── */
+#score-scroll{height:calc(100vh - 190px);max-height:none}
+
+/* ── 閲覧タブ：日経帯 ─────────────────────────────── */
+.band-scroll{margin-bottom:0;border-radius:var(--r) var(--r) 0 0;border-bottom:none}
+.band-tbl td.col-stock{background:#e8edf5}
+.band-cell{text-align:center;cursor:pointer;padding:4px 7px;vertical-align:bottom}
+.band-cell:hover{background:#f5f7fa}
+.band-cell.band-selected{background:#fef9c3}
+.band-bar-track{display:flex;align-items:flex-end;justify-content:center}
+.band-bar{width:10px;min-height:2px;border-radius:2px;margin:0 auto}
+.band-date-lbl{font-size:10px;color:var(--muted);margin-top:2px}
+
+/* ── 閲覧タブ：選択日の列ハイライト ──────────────── */
+.view-tbl th.col-selected,
+.view-tbl td.score-cell.col-selected{background:#fef9c3}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════════════ -->
+<header class="app-header">
+  <div class="app-title">📈 日経連動性トラッカー</div>
+  <div class="hdr-btns">
+    <button class="btn" onclick="exportJSON()">⬇ JSON書き出し</button>
+    <button class="btn" onclick="triggerImport()">⬆ JSON読み込み</button>
+    <input type="file" id="import-file" accept=".json" onchange="handleImport(this)" style="display:none">
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════════
+     TAB NAVIGATION
+════════════════════════════════════════════════════ -->
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('input')" id="tabn-input">📝 入力</button>
+  <button class="tab-btn" onclick="switchTab('view')" id="tabn-view">📊 閲覧</button>
+  <button class="tab-btn" onclick="switchTab('stocks')" id="tabn-stocks">🏷 銘柄管理</button>
+</nav>
+
+<!-- ════════════════════════════════════════════════
+     TAB: 入力
+════════════════════════════════════════════════════ -->
+<div id="tab-input" class="tab-panel active">
+  <!-- 日経データ入力（新しい日付の列を作る） -->
+  <div class="card">
+    <div class="section-title">日経データ入力</div>
+    <div class="gap-row" style="margin-bottom:12px">
+      <div class="field" style="margin:0;width:180px">
+        <label class="label">日付</label>
+        <input type="date" id="mkt-date" onchange="loadMarketInputForm()">
+      </div>
+    </div>
+    <div class="gap-row" style="margin-bottom:12px">
+      <div class="field" style="margin:0;width:120px">
+        <label class="label">始値</label>
+        <input type="number" id="mkt-open" step="any">
+      </div>
+      <div class="field" style="margin:0;width:120px">
+        <label class="label">高値</label>
+        <input type="number" id="mkt-high" step="any">
+      </div>
+      <div class="field" style="margin:0;width:120px">
+        <label class="label">安値</label>
+        <input type="number" id="mkt-low" step="any">
+      </div>
+      <div class="field" style="margin:0;width:120px">
+        <label class="label">終値</label>
+        <input type="number" id="mkt-close" step="any">
+      </div>
+    </div>
+    <div class="field">
+      <label class="label">サマリ</label>
+      <textarea id="mkt-summary" rows="3"></textarea>
+    </div>
+    <div class="gap-row">
+      <button class="btn btn-primary" onclick="saveMarketInput()">💾 保存</button>
+    </div>
+  </div>
+
+  <!-- 相関計算（自動評価） -->
+  <div class="card">
+    <div class="section-title">相関計算（自動評価）</div>
+    <div class="muted" style="margin-bottom:10px">対象日の日経平均先物と各銘柄の値動きの相関から、自動スコアを算出します。ローカルサーバーが起動している必要があります（オプション機能）。</div>
+    <div class="gap-row" style="margin-bottom:12px">
+      <div class="field" style="margin:0;width:180px">
+        <label class="label">対象日</label>
+        <input type="date" id="corr-date">
+      </div>
+      <button class="btn btn-primary" id="corr-run-btn" onclick="runCorrelation()" style="align-self:flex-end">📊 相関を計算する</button>
+    </div>
+    <div id="corr-result-area"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     TAB: 閲覧
+════════════════════════════════════════════════════ -->
+<div id="tab-view" class="tab-panel">
+  <div class="filter-bar">
+    <label>期間：</label>
+    <div class="range-btns" id="range-btns">
+      <button class="range-btn active" data-range="60" onclick="setRange(this)">直近60日</button>
+      <button class="range-btn" data-range="90" onclick="setRange(this)">直近90日</button>
+      <button class="range-btn" data-range="all" onclick="setRange(this)">全期間</button>
+      <button class="range-btn" data-range="custom" onclick="setRange(this)">カスタム</button>
+    </div>
+    <div class="custom-range" id="custom-range">
+      <input type="date" id="range-from" onchange="renderViewTab()">
+      <span>〜</span>
+      <input type="date" id="range-to" onchange="renderViewTab()">
+    </div>
+    <button class="btn btn-sm" id="band-toggle-btn" onclick="toggleBand()">📊 日経帯</button>
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:normal;color:var(--muted)">
+      <input type="checkbox" id="show-hidden-stocks-cb" onchange="toggleShowHiddenStocks(this.checked)">
+      非表示銘柄も表示
+    </label>
+    <button class="btn btn-sm" onclick="exportViewCSV()">⬇ CSV</button>
+    <button class="btn btn-sm" onclick="exportMarketCSV()">⬇ 日経CSV</button>
+  </div>
+  <div class="score-legend">
+    <div class="score-legend-row">
+      <div class="score-legend-cell sc-v0">0.0</div>
+      <div class="score-legend-cell sc-v5">0.5</div>
+      <div class="score-legend-cell sc-v10">1.0</div>
+      <div class="score-legend-cell sc-v15">1.5</div>
+      <div class="score-legend-cell sc-v20">2.0</div>
+      <div class="score-legend-cell sc-v25">2.5</div>
+      <div class="score-legend-cell sc-v30">3.0</div>
+      <div class="score-legend-cell sc-v35">3.5</div>
+      <div class="score-legend-cell sc-v40">4.0</div>
+      <div class="score-legend-cell sc-v45">4.5</div>
+      <div class="score-legend-cell sc-v50">5.0</div>
+    </div>
+    <div class="score-legend-labels"><span>逆行</span><span>無相関</span><span>完全連動</span></div>
+    <div class="muted" style="font-size:11px;margin-top:4px">● 印は手動データありのセル</div>
+  </div>
+  <div id="view-table-wrap"></div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     TAB: 銘柄管理
+════════════════════════════════════════════════════ -->
+<div id="tab-stocks" class="tab-panel">
+  <!-- Search + Add -->
+  <div class="card">
+    <div class="section-title">銘柄を追加</div>
+    <div class="add-form">
+      <div class="field">
+        <label class="label">コード</label>
+        <input type="text" id="add-code" placeholder="例: 7203" maxlength="6">
+      </div>
+      <div class="field" style="flex:2">
+        <label class="label">銘柄名</label>
+        <input type="text" id="add-name" placeholder="例: トヨタ自動車">
+      </div>
+      <button class="btn btn-primary" onclick="addStock()">+ 追加</button>
+    </div>
+  </div>
+
+  <!-- CSV Bulk Import -->
+  <div class="card">
+    <div class="section-title">CSV一括インポート</div>
+    <div class="muted" style="margin-bottom:8px">「コード,銘柄名」形式で1行1銘柄。ヘッダ行は自動スキップ。</div>
+    <textarea id="csv-import-text" rows="5"
+      placeholder="7203,トヨタ自動車&#10;6758,ソニーグループ"></textarea>
+    <div class="gap-row" style="margin-top:8px">
+      <button class="btn btn-primary" onclick="bulkImportStocks(true)">インポート（重複スキップ）</button>
+      <button class="btn" onclick="bulkImportStocks(false)">インポート（重複上書き）</button>
+    </div>
+  </div>
+
+  <!-- Stock List -->
+  <div class="card">
+    <div class="gap-row" style="margin-bottom:10px">
+      <div class="section-title" style="margin:0">銘柄一覧</div>
+      <input type="text" class="search-input" id="stocks-search" placeholder="コード・名前で絞り込み" oninput="renderStocksTab()">
+    </div>
+    <div id="stocks-list-wrap"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     MODAL: 銘柄編集
+════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div class="modal" id="modal">
+    <div class="modal-hdr">
+      <div class="modal-title" id="modal-title">銘柄を編集</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label class="label">コード</label>
+        <input type="text" id="edit-code" maxlength="6">
+      </div>
+      <div class="field">
+        <label class="label">銘柄名</label>
+        <input type="text" id="edit-name">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 日付編集モーダル（閲覧タブの日付ヘッダクリックで開く） -->
+<div class="modal-overlay" id="date-modal-overlay" onclick="onDateModalOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title" id="date-modal-title"></div>
+      <button class="modal-close" onclick="closeDateModal()">✕</button>
+    </div>
+    <div class="modal-body" id="date-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeDateModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveDateModal()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 相関計算：サーバー未起動エラーモーダル -->
+<div class="modal-overlay" id="corr-error-modal-overlay" onclick="if(event.target===this) closeCorrErrorModal()">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">サーバーに接続できません</div>
+      <button class="modal-close" onclick="closeCorrErrorModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;line-height:1.6">
+        ローカルサーバーが起動していないか、応答がありません。
+      </div>
+      <div class="info-box" style="font-size:12px">
+        相関計算にはローカルサーバー（http://localhost:8765 の /correlate）が必要です。サーバーは本リポジトリに含まれていません。
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeCorrErrorModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ================================================================
+// STORAGE KEYS  — nkcp_ プレフィックスのみ使用（本体版と localStorage が衝突しないよう分離）
+// ================================================================
+const KEY_STOCKS = 'nkcp_stocks';
+const KEY_SCORES = 'nkcp_scores';
+const KEY_MARKET = 'nkcp_market';
+
+// ================================================================
+// INITIAL STOCK MASTER（動作確認用サンプル 5 銘柄。推奨ではありません）
+// ================================================================
+const INITIAL_STOCKS = [
+  {"code":"6758","name":"ソニーグループ","aliases":[]},
+  {"code":"6861","name":"キーエンス","aliases":[]},
+  {"code":"7203","name":"トヨタ自動車","aliases":[]},
+  {"code":"9432","name":"日本電信電話","aliases":[]},
+  {"code":"9984","name":"ソフトバンクグループ","aliases":[]}
+].map(s => ({ aliases: [], visible: true, fetchTarget: true, ...s }));
+
+// ================================================================
+// STATE
+// ================================================================
+let stocks = [];   // [{code, name, visible, fetchTarget}]
+let scores = {};   // {"YYYY-MM-DD": {"code": score}}
+let market = {};   // {"YYYY-MM-DD": {open,high,low,close,summary,source}}
+
+// Index for O(1) lookups (rebuilt after any stock change)
+let codeIdx  = new Map(); // code -> stock
+
+// Edit modal state
+let editingCode = null;
+
+// View filter state
+let viewRange = '60';
+
+// 日経帯 state
+let bandOn = false;
+let selectedBandDate = null;
+let showHiddenStocks = false; // 「非表示銘柄も表示」チェックボックス（確認用）
+
+// ================================================================
+// PERSISTENCE
+// ================================================================
+function loadAll() {
+  try { stocks = JSON.parse(localStorage.getItem(KEY_STOCKS) || 'null') || []; }
+  catch(e) { stocks = []; }
+  try { scores = JSON.parse(localStorage.getItem(KEY_SCORES) || '{}'); }
+  catch(e) { scores = {}; }
+  try { market = JSON.parse(localStorage.getItem(KEY_MARKET) || '{}'); }
+  catch(e) { market = {}; }
+  // 既存銘柄に visible/fetchTarget が無い場合は読み込み時にのみ補完（保存し直しはしない）
+  stocks.forEach(s => {
+    if (s.visible === undefined) s.visible = true;
+    if (s.fetchTarget === undefined) s.fetchTarget = true;
+  });
+}
+
+function saveStocks() {
+  try { localStorage.setItem(KEY_STOCKS, JSON.stringify(stocks)); }
+  catch(e) { showToast('保存に失敗しました'); }
+}
+
+function saveScores() {
+  try { localStorage.setItem(KEY_SCORES, JSON.stringify(scores)); }
+  catch(e) { showToast('保存に失敗しました'); }
+}
+
+function saveMarket() {
+  try { localStorage.setItem(KEY_MARKET, JSON.stringify(market)); }
+  catch(e) { showToast('保存に失敗しました'); }
+}
+
+// ================================================================
+// INDEX REBUILD  (stocksが変わるたびに呼ぶ)
+// ================================================================
+function rebuildIndexes() {
+  codeIdx.clear();
+  stocks.forEach(s => codeIdx.set(s.code, s));
+}
+
+// ================================================================
+// NORMALIZATION
+// 処理順序: 全角英数→半角 → 全角スペース→半角 → 助詞除去 →
+//           句読点除去 → 連続スペース圧縮 → 大文字化
+// カタカナはそのまま保持。大文字化はASCIIに影響し日本語は無変化。
+// ================================================================
+function norm(s) {
+  if (!s) return '';
+  // 全角英数字・記号を半角に (！(0xFF01) 〜 ～(0xFF5E))
+  s = s.replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  // 全角スペース
+  s = s.replace(/　/g, ' ');
+  // 助詞除去（文字レベルで除去。株名に含まれないことを前提）
+  s = s.replace(/[はがのをにでとも]/g, '');
+  // 句読点・中黒等
+  s = s.replace(/[。、，,・「」『』【】]/g, '');
+  // スペース圧縮
+  s = s.replace(/\s+/g, ' ').trim();
+  // 大文字化（ASCII のみ影響）
+  return s.toUpperCase();
+}
+
+// ================================================================
+// SCORE UTILITIES
+// ================================================================
+function isValidScore(n) {
+  return typeof n === 'number' && n >= 0 && n <= 5 && (n * 2) % 1 === 0;
+}
+
+// "3" or "3.5" (省略表示)
+function fmtScore(n) {
+  if (n == null) return '';
+  return Number.isInteger(n) ? String(n) : String(n);
+}
+
+// CSS class for score cell coloring（スコア値ごとに専用クラス sc-v0〜sc-v50 を割り当て）
+function scoreClass(n) {
+  if (n == null) return '';
+  return 'sc-v' + Math.round(n * 10);
+}
+
+// ================================================================
+// SCORE ENTRY（v5〜）: { manual: number|null, auto: number|null, correlation: number|null, autoCalculatedAt: string|null }
+// 旧形式（値がそのまま数値）は読み取り時に manual として扱う
+// ================================================================
+
+// 数値のまま残っているエントリをオブジェクト形式に変換（バージョン移行・インポート共用）
+function migrateScoresInPlace(scoresObj) {
+  Object.keys(scoresObj).forEach(d => {
+    Object.keys(scoresObj[d]).forEach(c => {
+      if (typeof scoresObj[d][c] === 'number') {
+        scoresObj[d][c] = { manual: scoresObj[d][c], auto: null, correlation: null, beta: null, adjusted: null, autoCalculatedAt: null, limitStatus: null };
+      }
+    });
+  });
+}
+
+// 表示用の最終スコアを取得（manual優先、なければauto）
+function getEffectiveScore(date, code) {
+  const entry = scores[date]?.[code];
+  if (!entry) return null;
+  if (typeof entry === 'number') return entry; // 移行漏れの保険
+  if (entry.auto !== null && entry.auto !== undefined) return entry.auto;
+  if (entry.manual !== null && entry.manual !== undefined) return entry.manual;
+  return null;
+}
+
+// 手動スコアを設定（実数値を設定する場合はストップ高安フラグと相互排他でクリアする）
+function setManualScore(date, code, value) {
+  if (!scores[date]) scores[date] = {};
+  if (!scores[date][code] || typeof scores[date][code] === 'number') {
+    scores[date][code] = { manual: null, auto: null, correlation: null, beta: null, adjusted: null, autoCalculatedAt: null, limitStatus: null };
+  }
+  scores[date][code].manual = value;
+  if (value != null) scores[date][code].limitStatus = null;
+}
+
+// 自動スコアを設定（correlation: 生の相関係数, beta: 回帰の傾き, adjusted: β補正後の値）
+function setAutoScore(date, code, autoScore, correlation, beta, adjusted) {
+  if (!scores[date]) scores[date] = {};
+  if (!scores[date][code] || typeof scores[date][code] === 'number') {
+    scores[date][code] = { manual: null, auto: null, correlation: null, beta: null, adjusted: null, autoCalculatedAt: null, limitStatus: null };
+  }
+  scores[date][code].auto = autoScore;
+  scores[date][code].correlation = correlation;
+  scores[date][code].beta = beta != null ? beta : null;
+  scores[date][code].adjusted = adjusted != null ? adjusted : null;
+  scores[date][code].autoCalculatedAt = new Date().toISOString();
+}
+
+// ストップ高・ストップ安フラグを設定（"up"|"down"|null）。手動スコアの数値とは相互排他
+function setLimitStatus(date, code, status) {
+  if (!scores[date]) scores[date] = {};
+  if (!scores[date][code] || typeof scores[date][code] === 'number') {
+    scores[date][code] = { manual: null, auto: null, correlation: null, beta: null, adjusted: null, autoCalculatedAt: null, limitStatus: null };
+  }
+  scores[date][code].limitStatus = status;
+  if (status === 'up' || status === 'down') {
+    scores[date][code].manual = null;
+  }
+}
+
+// 閲覧タブのスコアセル用ツールチップ（手動・自動・相関/β/補正値を表示）
+function buildScoreTooltip(date, code) {
+  const entry = scores[date]?.[code];
+  if (!entry) return '';
+  const stock = codeIdx.get(code);
+  const header = `${date} ${code} ${stock ? stock.name : ''}`.trim();
+
+  if (typeof entry === 'number') return `${header}\n手動: ${fmtScore(entry)}`;
+
+  if (entry.limitStatus === 'up' || entry.limitStatus === 'down') {
+    const label = entry.limitStatus === 'up' ? 'ストップ高' : 'ストップ安';
+    return `${header}\n${label}（データ不足のため相関計算不可）`;
+  }
+
+  const manual = entry.manual;
+  const auto = entry.auto;
+  const lines = [header];
+
+  if (manual != null && auto != null) {
+    lines.push(`手動: ${fmtScore(manual)}`);
+    const detailParts = [];
+    if (entry.correlation != null) detailParts.push(`相関 ${entry.correlation.toFixed(3)}`);
+    if (entry.beta != null) detailParts.push(`β ${entry.beta.toFixed(2)}`);
+    if (entry.adjusted != null) detailParts.push(`補正 ${entry.adjusted.toFixed(3)}`);
+    lines.push(`自動: ${fmtScore(auto)}${detailParts.length ? '（' + detailParts.join(' / ') + '）' : ''}`);
+  } else if (manual != null) {
+    lines.push(`手動: ${fmtScore(manual)}`);
+  } else if (auto != null) {
+    lines.push(`スコア: ${fmtScore(auto)}（自動）`);
+    if (entry.correlation != null) lines.push(`相関: ${entry.correlation.toFixed(3)}`);
+    if (entry.beta != null) lines.push(`β: ${entry.beta.toFixed(2)}`);
+    if (entry.adjusted != null) lines.push(`補正値: ${entry.adjusted.toFixed(3)}`);
+  } else {
+    lines.push('未記入');
+  }
+
+  return lines.join('\n');
+}
+
+// ================================================================
+// DATE UTILITIES
+// ================================================================
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-'
+    + String(d.getMonth()+1).padStart(2,'0') + '-'
+    + String(d.getDate()).padStart(2,'0');
+}
+
+function addDays(ds, n) {
+  const d = new Date(ds + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function fmtDateShort(ds) {
+  const [,m,d] = ds.split('-');
+  return parseInt(m) + '/' + parseInt(d);
+}
+
+function weekdayShort(ds) {
+  const wd = ['日','月','火','水','木','金','土'];
+  return wd[new Date(ds + 'T00:00:00').getDay()];
+}
+
+// 対象日より前で、日経データが登録されている直近の日付（連続した前日とは限らない）
+function getPrevMarketDate(d) {
+  let prev = null;
+  Object.keys(market).sort().forEach(md => { if (md < d) prev = md; });
+  return prev;
+}
+
+// ================================================================
+// 銘柄コードの並び順統一：数字のみのコードを数値順→英字を含むコードを最後にまとめる
+// ================================================================
+function compareStockCode(a, b) {
+  const isAlphaA = /[A-Za-z]/.test(a);
+  const isAlphaB = /[A-Za-z]/.test(b);
+
+  // 英字を含むかどうかで大分類（数字のみ優先）
+  if (isAlphaA !== isAlphaB) {
+    return isAlphaA ? 1 : -1;
+  }
+
+  if (!isAlphaA) {
+    // 両方とも数字のみのコード → 数値として比較
+    return parseInt(a, 10) - parseInt(b, 10);
+  }
+
+  // 両方とも英字を含むコード → 文字列として比較
+  return a.localeCompare(b);
+}
+
+// ================================================================
+// 日経データ入力（入力タブ）
+// 保存先は market[日付]（= nkcp_market）。日付ポップアップと同じ writeMarketRecord を使う。
+// ================================================================
+function marketHasAnyValue(m) {
+  if (!m) return false;
+  const ohlc = [m.open, m.high, m.low, m.close];
+  return ohlc.some(v => v != null && !isNaN(v)) || !!(m.summary && m.summary.trim());
+}
+
+// 4本値・サマリを market[date] に書き込んで保存（値が1つも無ければ何もしない）
+function writeMarketRecord(date, draft) {
+  if (!marketHasAnyValue(draft)) return false;
+  market[date] = {
+    open: draft.open, high: draft.high, low: draft.low, close: draft.close,
+    summary: draft.summary || '', source: 'manual'
+  };
+  saveMarket();
+  return true;
+}
+
+const MKT_INPUT_FIELDS = ['open', 'high', 'low', 'close'];
+
+// 日付変更時：既存の日経データがあればフォームに読み込む
+function loadMarketInputForm() {
+  const date = document.getElementById('mkt-date').value;
+  const m = market[date] || {};
+  MKT_INPUT_FIELDS.forEach(f => {
+    document.getElementById('mkt-' + f).value = m[f] != null ? m[f] : '';
+  });
+  document.getElementById('mkt-summary').value = m.summary || '';
+}
+
+function saveMarketInput() {
+  const date = document.getElementById('mkt-date').value;
+  if (!date) { showToast('日付を入力してください'); return; }
+  const draft = {};
+  MKT_INPUT_FIELDS.forEach(f => {
+    const raw = document.getElementById('mkt-' + f).value.trim();
+    const v = parseFloat(raw);
+    draft[f] = raw === '' || isNaN(v) ? null : v;
+  });
+  draft.summary = document.getElementById('mkt-summary').value.trim();
+  if (!writeMarketRecord(date, draft)) { showToast('値を1つ以上入力してください'); return; }
+  renderViewTab();
+  showToast(`${date} の日経データを保存しました`);
+}
+
+// ================================================================
+// 相関計算（自動評価）
+// ================================================================
+const CORRELATE_URL = 'http://localhost:8765/correlate';
+const CORRELATE_TIMEOUT_MS = 60000; // 全銘柄分の5分足取得には数十秒かかるため長めに設定
+
+let _corrRows = null;   // [{code, name, correlation, beta, adjusted, autoScore, sampleCount}]
+let _corrDate = null;
+let _corrErrors = [];
+let _corrInsufficientCodes = []; // [{code, message}] サンプル不足でストップ高安選択の対象になった銘柄
+let _corrLimitSelections = {};   // { [code]: 'up'|'down'|null } 結果テーブルでのストップ高安選択状態
+
+async function runCorrelation() {
+  const date = document.getElementById('corr-date').value;
+  if (!date) { showToast('対象日を入力してください'); return; }
+  if (!stocks.length) { showToast('銘柄が登録されていません'); return; }
+
+  // 取得設定（fetchTarget）がOFFの銘柄は相関計算の対象から除外
+  const codes = stocks.filter(s => s.fetchTarget !== false).map(s => s.code);
+  if (!codes.length) { showToast('取得対象の銘柄がありません（取得チェックを確認してください）'); return; }
+
+  const btn = document.getElementById('corr-run-btn');
+  const area = document.getElementById('corr-result-area');
+  btn.disabled = true;
+  area.innerHTML = '<div class="muted" style="margin-top:10px">計算中...（時間がかかります）</div>';
+  _corrInsufficientCodes = [];
+  _corrLimitSelections = {};
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CORRELATE_TIMEOUT_MS);
+
+  try {
+    const url = `${CORRELATE_URL}?date=${encodeURIComponent(date)}&codes=${codes.join(',')}`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      let body = {};
+      try { body = await res.json(); } catch {}
+      area.innerHTML = '';
+      showToast('相関計算に失敗しました: ' + (body.error || res.status));
+      return;
+    }
+
+    const data = await res.json();
+    _corrDate = data.date || date;
+    _corrErrors = data.errors || [];
+    _corrRows = Object.entries(data.correlations || {}).map(([code, c]) => {
+      const stock = codeIdx.get(code);
+      return {
+        code,
+        name: stock ? stock.name : code,
+        correlation: c.correlation,
+        beta: c.beta,
+        adjusted: c.adjusted,
+        autoScore: c.auto_score,
+        sampleCount: c.sample_count,
+      };
+    }).sort((a, b) => compareStockCode(a.code, b.code));
+    renderCorrResults();
+  } catch (e) {
+    clearTimeout(timeoutId);
+    area.innerHTML = '';
+    if (e.name === 'AbortError') {
+      showToast('タイムアウトしました（60秒）。時間をおいて再度お試しください');
+    } else {
+      openCorrErrorModal();
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function openCorrErrorModal() {
+  document.getElementById('corr-error-modal-overlay').classList.add('open');
+}
+function closeCorrErrorModal() {
+  document.getElementById('corr-error-modal-overlay').classList.remove('open');
+}
+
+function renderCorrResults() {
+  const area = document.getElementById('corr-result-area');
+  if (!_corrRows) { area.innerHTML = ''; return; }
+
+  let html = '<div class="gap-row" style="margin:14px 0 8px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary btn-sm" onclick="saveCorrResults()">💾 保存して確定</button>'
+    + '</div>';
+  html += '<div id="corr-table-wrap"></div>';
+
+  if (_corrErrors.length) {
+    const parsed = _corrErrors.map(parseCorrError);
+    _corrInsufficientCodes = parsed.filter(p => p.code && /insufficient/i.test(p.message));
+    const otherErrors = parsed.filter(p => !(p.code && /insufficient/i.test(p.message)));
+
+    if (otherErrors.length) {
+      html += '<div class="card" style="margin-top:10px;padding:10px 12px">'
+        + '<div class="section-title" style="margin-bottom:6px">取得失敗</div>'
+        + '<ul style="margin:0;padding-left:18px;font-size:12px;color:var(--red)">'
+        + otherErrors.map(p => `<li>${esc(p.code ? p.code + ': ' + p.message : p.message)}</li>`).join('')
+        + '</ul></div>';
+    }
+
+    if (_corrInsufficientCodes.length) {
+      html += '<div class="card" style="margin-top:10px;padding:10px 12px">'
+        + '<div class="section-title" style="margin-bottom:6px">データ不足銘柄（ストップ高/安の可能性）</div>'
+        + '<div class="muted" style="margin-bottom:8px">相関計算に必要なサンプル数が不足していた銘柄です。値動きがストップ高／安だった場合は選択してください（デフォルトは「通常」＝何も記録しません）。</div>'
+        + '<div id="corr-limit-list"></div>'
+        + '</div>';
+    }
+  } else {
+    _corrInsufficientCodes = [];
+  }
+
+  area.innerHTML = html;
+  renderCorrTable();
+  if (_corrInsufficientCodes.length) renderCorrLimitList();
+}
+
+// エラー文字列 "コード: メッセージ" を分解
+function parseCorrError(e) {
+  const idx = e.indexOf(':');
+  if (idx === -1) return { code: null, message: e };
+  return { code: e.slice(0, idx).trim(), message: e.slice(idx + 1).trim() };
+}
+
+function renderCorrLimitList() {
+  const wrap = document.getElementById('corr-limit-list');
+  if (!wrap) return;
+  let html = '';
+  _corrInsufficientCodes.forEach(({ code, message }) => {
+    const stock = codeIdx.get(code);
+    const name = stock ? stock.name : code;
+    const sel = _corrLimitSelections[code] || null;
+    html += `<div class="gap-row" style="justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap">
+      <div><span style="font-family:var(--mono);color:var(--muted)">${esc(code)}</span> ${esc(name)}
+        <span class="muted">（${esc(message)}）</span></div>
+      <div class="gap-row" style="gap:4px">
+        <button class="btn btn-sm${sel == null ? ' btn-primary' : ''}" onclick="setCorrLimitSelection('${esc(code)}', null)">通常</button>
+        <button class="btn btn-sm${sel === 'up' ? ' btn-primary' : ''}" onclick="setCorrLimitSelection('${esc(code)}', 'up')">S高</button>
+        <button class="btn btn-sm${sel === 'down' ? ' btn-primary' : ''}" onclick="setCorrLimitSelection('${esc(code)}', 'down')">S安</button>
+      </div>
+    </div>`;
+  });
+  wrap.innerHTML = html;
+}
+
+function setCorrLimitSelection(code, status) {
+  _corrLimitSelections[code] = status;
+  renderCorrLimitList();
+}
+
+function renderCorrTable() {
+  const wrap = document.getElementById('corr-table-wrap');
+  if (!wrap || !_corrRows) return;
+
+  if (!_corrRows.length) {
+    wrap.innerHTML = '<div class="muted">相関を計算できた銘柄がありません</div>';
+    return;
+  }
+
+  let html = '<div class="view-scroll" style="max-height:50vh"><table class="tbl"><thead><tr>'
+    + '<th>銘柄</th><th>相関</th><th>β</th><th>補正値</th><th>自動スコア</th></tr></thead><tbody>';
+
+  _corrRows.forEach(r => {
+    html += `<tr>
+      <td><span style="font-family:var(--mono);color:var(--muted)">${esc(r.code)}</span> ${esc(r.name)}</td>
+      <td style="font-family:var(--mono)">${r.correlation != null ? r.correlation.toFixed(3) : '—'}</td>
+      <td style="font-family:var(--mono)">${r.beta != null ? r.beta.toFixed(2) : '—'}</td>
+      <td style="font-family:var(--mono)">${r.adjusted != null ? r.adjusted.toFixed(3) : '—'}</td>
+      <td style="font-family:var(--mono);font-weight:700">${r.autoScore != null ? fmtScore(r.autoScore) : '—'}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+function saveCorrResults() {
+  if (!_corrRows || !_corrDate) return;
+  let saved = 0;
+  // 自動スコアのみ保存（既存の手動スコアは変更しない）
+  _corrRows.forEach(r => {
+    if (r.autoScore == null) return;
+    setAutoScore(_corrDate, r.code, r.autoScore, r.correlation, r.beta, r.adjusted);
+    saved++;
+  });
+
+  let limitSaved = 0;
+  Object.entries(_corrLimitSelections).forEach(([code, status]) => {
+    if (status === 'up' || status === 'down') {
+      setLimitStatus(_corrDate, code, status);
+      limitSaved++;
+    }
+  });
+
+  saveScores();
+  showToast(`${saved}件のスコアを保存しました${limitSaved ? `（ストップ高安 ${limitSaved}件）` : ''}`);
+  if (document.getElementById('tab-view').classList.contains('active')) {
+    renderViewTab();
+    scrollTableToLatest();
+  }
+}
+
+// ================================================================
+// VIEW TAB
+// ================================================================
+
+// 閲覧タブのテーブルを横スクロールで最新日付（右端）まで送る。
+// innerHTML更新直後はレイアウトが確定していない場合があるため、次フレームで実行する。
+function scrollTableToLatest() {
+  const container = document.getElementById('score-scroll');
+  if (container) {
+    requestAnimationFrame(() => {
+      container.scrollLeft = container.scrollWidth;
+    });
+  }
+}
+
+function setRange(btn) {
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  viewRange = btn.dataset.range;
+  const customDiv = document.getElementById('custom-range');
+  customDiv.classList.toggle('show', viewRange === 'custom');
+  renderViewTab();
+  scrollTableToLatest();
+}
+
+function getFilteredDates() {
+  // スコアのある日付に加え、日経データのみ入力済みの日付も列として扱う
+  const allDates = [...new Set([...Object.keys(scores), ...Object.keys(market)])].sort();
+  if (!allDates.length) return [];
+
+  const today = todayStr();
+
+  if (viewRange === 'all') return allDates;
+
+  if (viewRange === 'custom') {
+    const from = document.getElementById('range-from').value;
+    const to   = document.getElementById('range-to').value;
+    if (!from && !to) return allDates;
+    return allDates.filter(d => (!from || d >= from) && (!to || d <= to));
+  }
+
+  const days = parseInt(viewRange);
+  // 「直近60日」は今日ではなく実データの最新日付を基準にする（当日分が未記録だと空列が残るため）
+  const anchor = (days === 60) ? allDates[allDates.length - 1] : today;
+  const from = addDays(anchor, -(days - 1));
+  return allDates.filter(d => d >= from && d <= anchor);
+}
+
+function renderViewTab() {
+  const wrap = document.getElementById('view-table-wrap');
+  const dates = getFilteredDates();
+
+  if (!dates.length) {
+    wrap.innerHTML = '<div class="muted">この期間にデータがありません</div>';
+    return;
+  }
+
+  // 銘柄マスタの全銘柄＋対象期間にスコアを持つ銘柄を列挙
+  // （マスタ銘柄は空行でも表示し、セルクリックで最初のスコアを入力できるようにする）
+  const codesInRange = new Set(stocks.map(s => s.code));
+  dates.forEach(d => { if(scores[d]) Object.keys(scores[d]).forEach(c => codesInRange.add(c)); });
+
+  // 数字のみのコードを数値順→英字を含むコードを最後にまとめる
+  const sortedCodesInRange = [...codesInRange].sort(compareStockCode);
+  // visible:false の銘柄は既定では非表示（「非表示銘柄も表示」がONなら含める）。
+  // マスタ未登録コードは対象外（判定材料がないため常に表示）
+  const allCodes = showHiddenStocks
+    ? sortedCodesInRange
+    : sortedCodesInRange.filter(c => {
+        const s = codeIdx.get(c);
+        return !s || s.visible !== false;
+      });
+
+  if (!allCodes.length) {
+    wrap.innerHTML = '<div class="muted">この期間に記録がありません</div>';
+    return;
+  }
+
+  // 日経帯 ON 時：選択日を補正（範囲外なら再選択）
+  let bandHtml = '';
+  if (bandOn) {
+    if (!selectedBandDate || !dates.includes(selectedBandDate)) {
+      const marketDatesInRange = dates.filter(d => market[d]);
+      selectedBandDate = marketDatesInRange.length
+        ? marketDatesInRange[marketDatesInRange.length - 1]
+        : dates[dates.length - 1];
+    }
+    bandHtml = renderNikkeiBandHTML(dates) + renderSelectedDaySummaryHTML();
+  }
+
+  let html = '<div class="view-scroll" id="score-scroll"><table class="view-tbl score-grid"><thead><tr>'
+    + '<th class="col-stock">銘柄<br>＼ 日付、日経平均データ</th>';
+  dates.forEach(d => {
+    const md = market[d];
+    const prevD = getPrevMarketDate(d);
+    const prevClose = prevD ? market[prevD]?.close : null;
+
+    // 終値行：前日比に応じて色・太字を動的に決定。前日比の数値そのものはツールチップへ
+    let closeLine = '<div class="muted" style="font-size:10px">─</div>';
+    let hoverExtra = '';
+    if (md && md.close != null && !isNaN(md.close)) {
+      let closeColor = 'var(--text)';
+      let closeWeight = '400';
+      if (prevClose != null && !isNaN(prevClose)) {
+        const diff = md.close - prevClose;
+        const pct = prevClose ? diff / prevClose * 100 : 0;
+        if (diff > 0) closeColor = '#16a34a';
+        else if (diff < 0) closeColor = '#dc2626';
+        if (Math.abs(pct) >= 2) closeWeight = '700';
+        const sign = diff > 0 ? '+' : '';
+        hoverExtra = `\n前日比: ${sign}${Math.round(diff).toLocaleString()}円 (${sign}${pct.toFixed(1)}%)`;
+      }
+      closeLine = `<div style="font-family:var(--mono);font-size:10px;color:${closeColor};font-weight:${closeWeight}">${Math.round(md.close).toLocaleString()}</div>`;
+    }
+    const selCls = (bandOn && d === selectedBandDate) ? ' col-selected' : '';
+    const hdrTitle = esc(hoverExtra ? hoverExtra.trim() : '');
+    // 日付ヘッダクリックで日付全体編集モーダルを開く。日付・曜日・終値の3行のみ表示、前日比はホバーで表示
+    html += `<th class="date-hdr${selCls}" title="${hdrTitle}" onclick="openDateModal('${d}')">`
+      + `<div style="font-size:10px">${esc(fmtDateShort(d))}</div>`
+      + `<div class="muted" style="font-size:9px">（${weekdayShort(d)}）</div>`
+      + closeLine + `</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  allCodes.forEach(code => {
+    const stock = codeIdx.get(code);
+    const dname = stock ? stock.name : code;
+    const dcode = stock ? code : '';
+
+    let hasAny = false;
+    let cells = '';
+    dates.forEach(d => {
+      const entry = scores[d]?.[code];
+      const limitStatus = entry && typeof entry === 'object' ? entry.limitStatus : null;
+      const v = getEffectiveScore(d, code);
+      if (v != null || limitStatus) hasAny = true;
+      const selCls = (bandOn && d === selectedBandDate) ? ' col-selected' : '';
+      const tooltip = esc(buildScoreTooltip(d, code));
+      let cls, cellText;
+      if (limitStatus === 'up' || limitStatus === 'down') {
+        // ストップ高安：通常の色分けは適用せず、テキストのみで表示
+        cls = 'score-cell-limit score-cell-limit-' + limitStatus;
+        cellText = limitStatus === 'up' ? 'S高' : 'S安';
+      } else {
+        const hasManual = entry && typeof entry === 'object' && entry.manual != null;
+        cls = scoreClass(v) + (hasManual ? ' has-manual' : '');
+        cellText = '';
+      }
+      // スコアセルクリックでインライン編集モードを開く。数値は表示せず色のみで示す（ホバーで詳細）
+      cells += `<td class="score-cell ${cls}${selCls}" title="${tooltip}" onclick="openCellEdit(event,this,'${d}','${esc(code)}')">${cellText}</td>`;
+    });
+
+    // マスタ未登録コードで全セルが空の行は表示しない
+    if (!hasAny && !stock) return;
+
+    const fetchCheckbox = stock
+      ? `<input type="checkbox" class="fetch-target-cb" ${stock.fetchTarget !== false ? 'checked' : ''} title="相関計算の対象にする" onchange="toggleStockFetchTarget('${esc(code)}', this.checked)">`
+      : '';
+    const cellLabel = dcode
+      ? `${fetchCheckbox}<span class="stock-cell-code">${esc(dcode)}</span> <span class="stock-cell-name">${esc(dname)}</span>`
+      : `<span class="stock-cell-name">${esc(dname)}</span>`;
+    html += `<tr><td class="col-stock" title="${esc(dname)}">${cellLabel}</td>${cells}</tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  wrap.innerHTML = bandHtml + html;
+
+  if (bandOn) setupBandScrollSync();
+}
+
+// ================================================================
+// 日経帯（div ベース）
+// ================================================================
+function toggleBand() {
+  bandOn = !bandOn;
+  document.getElementById('band-toggle-btn').classList.toggle('active', bandOn);
+  renderViewTab();
+}
+
+// 「非表示銘柄も表示」チェックボックス（visible:false の銘柄を確認用に一時表示）
+function toggleShowHiddenStocks(checked) {
+  showHiddenStocks = checked;
+  renderViewTab();
+}
+
+function selectBandDate(d) {
+  selectedBandDate = d;
+  renderViewTab();
+}
+
+// 期間内の高値・安値から縦棒の正規化スケールを算出
+function computeBandScale(dates) {
+  let lo = Infinity, hi = -Infinity;
+  dates.forEach(d => {
+    const m = market[d];
+    if (m && m.low != null && m.high != null && !isNaN(m.low) && !isNaN(m.high)) {
+      lo = Math.min(lo, m.low);
+      hi = Math.max(hi, m.high);
+    }
+  });
+  if (!isFinite(lo) || !isFinite(hi) || hi <= lo) return { lo: 0, hi: 1 };
+  return { lo, hi };
+}
+
+function renderNikkeiBandHTML(dates) {
+  const scale = computeBandScale(dates);
+  const range = (scale.hi - scale.lo) || 1;
+  const trackH = 80;
+  let cellsHtml = '';
+  dates.forEach(d => {
+    const m = market[d];
+    let bar = `<div class="band-bar-track" style="height:${trackH}px"><span class="muted" style="font-size:11px">─</span></div>`;
+    if (m && [m.open, m.high, m.low, m.close].every(v => v != null && !isNaN(v))) {
+      const bottomPx = Math.round((m.low - scale.lo) / range * trackH);
+      const topPx    = Math.round((m.high - scale.lo) / range * trackH);
+      const barH = Math.max(2, topPx - bottomPx);
+      const color = m.close >= m.open ? 'var(--green)' : 'var(--red)';
+      bar = `<div class="band-bar-track" style="height:${trackH}px">`
+        + `<div class="band-bar" style="height:${barH}px;margin-bottom:${bottomPx}px;background:${color}"></div></div>`;
+    }
+    const sel = (d === selectedBandDate) ? ' band-selected' : '';
+    cellsHtml += `<td class="band-cell${sel}" onclick="selectBandDate('${d}')">${bar}<div class="band-date-lbl">${esc(fmtDateShort(d))}</div></td>`;
+  });
+  return `<div class="view-scroll band-scroll" id="band-scroll">
+    <table class="view-tbl band-tbl"><tbody><tr>
+      <td class="col-stock" style="font-size:11px;color:var(--muted)">日経帯</td>
+      ${cellsHtml}
+    </tr></tbody></table>
+  </div>`;
+}
+
+function renderSelectedDaySummaryHTML() {
+  const d = selectedBandDate;
+  if (!d) return '';
+  const m = market[d];
+  let body;
+  if (!m) {
+    body = '<div class="muted">この日の日経データはありません</div>';
+  } else {
+    const prevD = getPrevMarketDate(d);
+    const prevClose = prevD ? market[prevD].close : null;
+    let changeHtml = '';
+    if (m.close != null && prevClose != null && !isNaN(prevClose)) {
+      const diff = m.close - prevClose;
+      const pct = prevClose ? diff / prevClose * 100 : 0;
+      const color = diff > 0 ? 'var(--green)' : diff < 0 ? 'var(--red)' : 'var(--muted)';
+      const sign = diff > 0 ? '+' : '';
+      changeHtml = ` <span style="color:${color};font-weight:700">${sign}${Math.round(diff).toLocaleString()}円（${sign}${pct.toFixed(1)}%）</span>`;
+    }
+    body = `<div style="display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:13px;margin-bottom:6px">
+      <span>始値 ${m.open != null ? Math.round(m.open).toLocaleString() : '—'}</span>
+      <span>高値 ${m.high != null ? Math.round(m.high).toLocaleString() : '—'}</span>
+      <span>安値 ${m.low != null ? Math.round(m.low).toLocaleString() : '—'}</span>
+      <span>終値 ${m.close != null ? Math.round(m.close).toLocaleString() : '—'}</span>${changeHtml}
+    </div>
+    ${m.summary ? `<div style="font-size:13px;line-height:1.5">${esc(m.summary)}</div>` : '<div class="muted">サマリなし</div>'}`;
+  }
+  return `<div class="card" style="margin:0 0 14px;border-radius:0 0 var(--r) var(--r);border-top:none">
+    <div class="section-title" style="margin-bottom:8px">${esc(fmtDateShort(d))}（${weekdayShort(d)}）のサマリ</div>
+    ${body}
+  </div>`;
+}
+
+// 日経帯と本表の横スクロールを同期させる
+function setupBandScrollSync() {
+  const a = document.getElementById('band-scroll');
+  const b = document.getElementById('score-scroll');
+  if (!a || !b) return;
+  let syncing = false;
+  a.addEventListener('scroll', () => { if (syncing) return; syncing = true; b.scrollLeft = a.scrollLeft; syncing = false; });
+  b.addEventListener('scroll', () => { if (syncing) return; syncing = true; a.scrollLeft = b.scrollLeft; syncing = false; });
+}
+
+// ================================================================
+// 閲覧タブ 編集機能：共通ヘルパー
+// ================================================================
+
+// 手動スコアを更新して保存（機能A・Dの共通処理）
+function updateScore(date, code, value) {
+  setManualScore(date, code, value);
+  saveScores();
+}
+
+// スコアを削除して保存。日付オブジェクトが空になれば日付ごと削除
+function removeScore(date, code) {
+  if (!scores[date]) return;
+  delete scores[date][code];
+  if (Object.keys(scores[date]).length === 0) delete scores[date];
+  saveScores();
+}
+
+// ================================================================
+// 機能A：スコアセルのインライン編集
+// ================================================================
+
+let _editTd = null, _editDate = null, _editCode = null;
+let _editOrigHTML = null, _editOrigClass = null;
+
+function openCellEdit(evt, td, date, code) {
+  evt.stopPropagation(); // document click リスナーが即座に閉じるのを防ぐ
+  closeCellEdit();
+  _editTd = td;
+  _editDate = date;
+  _editCode = code;
+  _editOrigHTML = td.innerHTML;
+  _editOrigClass = td.className;
+
+  const entry = scores[date]?.[code];
+  const manualVal = entry ? (typeof entry === 'number' ? entry : entry.manual) : null;
+  const hasEntry = entry != null;
+  const hasManual = manualVal != null;
+  td.className = 'score-cell sc-editing';
+  td.innerHTML = `<div class="cell-edit-wrap">
+    <input id="_cei" class="cell-edit-input" type="number" step="0.5" min="0" max="5"
+      value="${hasManual ? manualVal : ''}" placeholder="0-5"
+      onkeydown="handleCellEditKey(event)">
+    <button class="cell-edit-btn cell-edit-ok" onclick="confirmCellEdit()" title="確定">✓</button>
+    <button class="cell-edit-btn cell-edit-limit" onclick="setCellLimitStatus('up')" title="ストップ高">S高</button>
+    <button class="cell-edit-btn cell-edit-limit" onclick="setCellLimitStatus('down')" title="ストップ安">S安</button>
+    ${hasEntry ? `<button class="cell-edit-btn cell-edit-del" onclick="deleteCellScore()" title="削除">×</button>` : ''}
+  </div>`;
+  const inp = document.getElementById('_cei');
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+function closeCellEdit() {
+  if (!_editTd) return;
+  _editTd.innerHTML = _editOrigHTML;
+  _editTd.className = _editOrigClass;
+  _editTd = null; _editDate = null; _editCode = null;
+  _editOrigHTML = null; _editOrigClass = null;
+}
+
+function confirmCellEdit() {
+  if (!_editTd) return;
+  const inp = document.getElementById('_cei');
+  if (!inp) return;
+  const raw = inp.value.trim();
+  if (raw === '') { closeCellEdit(); return; } // 空文字はキャンセル扱い
+  const n = parseFloat(raw);
+  if (!isValidScore(n)) {
+    inp.classList.add('invalid');
+    return;
+  }
+  const date = _editDate, code = _editCode;
+  _editTd = null; _editDate = null; _editCode = null;
+  _editOrigHTML = null; _editOrigClass = null;
+  updateScore(date, code, n);
+  renderViewTab();
+}
+
+// セルをストップ高／安として記録（手動スコアの数値とは相互排他）
+function setCellLimitStatus(status) {
+  if (!_editTd) return;
+  const date = _editDate, code = _editCode;
+  _editTd = null; _editDate = null; _editCode = null;
+  _editOrigHTML = null; _editOrigClass = null;
+  setLimitStatus(date, code, status);
+  saveScores();
+  renderViewTab();
+}
+
+function deleteCellScore() {
+  if (!_editTd) return;
+  if (!confirm('このスコアを削除しますか？')) return;
+  const date = _editDate, code = _editCode;
+  _editTd = null; _editDate = null; _editCode = null;
+  _editOrigHTML = null; _editOrigClass = null;
+  removeScore(date, code);
+  renderViewTab();
+}
+
+function handleCellEditKey(e) {
+  if (e.key === 'Enter') { e.preventDefault(); confirmCellEdit(); }
+  if (e.key === 'Escape') { closeCellEdit(); }
+}
+
+// セル外クリックでインライン編集を閉じる
+document.addEventListener('click', function(e) {
+  if (!_editTd) return;
+  if (!_editTd.contains(e.target)) closeCellEdit();
+});
+
+// ================================================================
+// 機能D：日付ヘッダクリック → 日付全体編集モーダル
+// ================================================================
+
+let _dateModalDate = null;
+let _dateModalRows = []; // {code, name, score, deleted, isNew}
+let _dateModalMarketDraft = null; // {open, high, low, close, summary}
+let _dateModalMarketEditing = false;
+
+function openDateModal(date) {
+  _dateModalDate = date;
+  _dateModalRows = [];
+  const dayScores = scores[date] || {};
+  // このモーダルは手動スコア（manual）を編集する。自動値のみのエントリは score:null として表示（許容）
+  const rawManual = v => (v == null) ? null : (typeof v === 'number' ? v : v.manual);
+  // 登録済みスコアを stocks の順で並べる
+  stocks.forEach(s => {
+    if (dayScores[s.code] != null) {
+      _dateModalRows.push({ code: s.code, name: s.name, score: rawManual(dayScores[s.code]), deleted: false, isNew: false });
+    }
+  });
+  // マスタ未登録コード（末尾）
+  Object.entries(dayScores).forEach(([c, v]) => {
+    if (!codeIdx.has(c)) _dateModalRows.push({ code: c, name: c, score: rawManual(v), deleted: false, isNew: false });
+  });
+  _dateModalMarketDraft = market[date]
+    ? { ...market[date] }
+    : { open: null, high: null, low: null, close: null, summary: '' };
+  _dateModalMarketEditing = false;
+  document.getElementById('date-modal-title').textContent = date + ' の記録を編集';
+  renderDateModalBody();
+  document.getElementById('date-modal-overlay').classList.add('open');
+}
+
+function closeDateModal() {
+  document.getElementById('date-modal-overlay').classList.remove('open');
+  _dateModalDate = null;
+  _dateModalRows = [];
+  _dateModalMarketDraft = null;
+  _dateModalMarketEditing = false;
+}
+
+function onDateModalOverlayClick(e) {
+  if (e.target === document.getElementById('date-modal-overlay')) closeDateModal();
+}
+
+// DOM から現在のスコア値とコード（新規行）を _dateModalRows に反映
+function syncDateModalRows() {
+  _dateModalRows.forEach((row, i) => {
+    const scoreEl = document.getElementById(`drow-score-${i}`);
+    if (scoreEl) {
+      const n = parseFloat(scoreEl.value);
+      row.score = isNaN(n) ? null : n;
+    }
+    if (row.isNew) {
+      const sel = document.getElementById(`drow-sel-${i}`);
+      if (sel) {
+        row.code = sel.value;
+        const s = codeIdx.get(sel.value);
+        row.name = s ? s.name : sel.value;
+      }
+    }
+  });
+}
+
+// 日付編集モーダル：日経平均セクション
+function renderDateModalMarketSection() {
+  const d = _dateModalDate;
+  const draft = _dateModalMarketDraft;
+  const hasAny = marketHasAnyValue(draft);
+  let inner;
+
+  if (_dateModalMarketEditing) {
+    inner = `
+      <div class="gap-row" style="flex-wrap:wrap;margin-bottom:8px">
+        <div class="field" style="margin:0;width:100px"><label class="label">始値</label>
+          <input type="number" step="0.01" value="${draft.open ?? ''}" oninput="onDateModalMarketChange('open',this.value)"></div>
+        <div class="field" style="margin:0;width:100px"><label class="label">高値</label>
+          <input type="number" step="0.01" value="${draft.high ?? ''}" oninput="onDateModalMarketChange('high',this.value)"></div>
+        <div class="field" style="margin:0;width:100px"><label class="label">安値</label>
+          <input type="number" step="0.01" value="${draft.low ?? ''}" oninput="onDateModalMarketChange('low',this.value)"></div>
+        <div class="field" style="margin:0;width:100px"><label class="label">終値</label>
+          <input type="number" step="0.01" value="${draft.close ?? ''}" oninput="onDateModalMarketChange('close',this.value)"></div>
+      </div>
+      <div class="field" style="margin:0 0 8px"><label class="label">サマリ</label>
+        <textarea rows="2" oninput="onDateModalMarketChange('summary',this.value)">${esc(draft.summary||'')}</textarea>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="toggleDateModalMarketEdit()">完了</button>`;
+  } else if (hasAny) {
+    const prevD = getPrevMarketDate(d);
+    const prevClose = prevD ? market[prevD]?.close : null;
+    let changeStr = '';
+    if (draft.close != null && prevClose != null && !isNaN(prevClose)) {
+      const diff = draft.close - prevClose;
+      const pct = prevClose ? diff / prevClose * 100 : 0;
+      const color = diff > 0 ? 'var(--green)' : diff < 0 ? 'var(--red)' : 'var(--muted)';
+      const sign = diff > 0 ? '+' : '';
+      changeStr = `　前日比 <span style="color:${color};font-weight:700">${sign}${Math.round(diff).toLocaleString()}（${sign}${pct.toFixed(1)}%）</span>`;
+    }
+    let candleStr = '';
+    if (draft.open != null && draft.close != null) {
+      candleStr = draft.close >= draft.open
+        ? ' <span style="color:var(--green);font-weight:700">陽線</span>'
+        : ' <span style="color:var(--red);font-weight:700">陰線</span>';
+    }
+    const width = (draft.high != null && draft.low != null) ? Math.round(draft.high - draft.low).toLocaleString() : '—';
+    inner = `
+      <div style="font-family:var(--mono);font-size:13px;line-height:1.7">
+        始値 ${draft.open != null ? Math.round(draft.open).toLocaleString() : '—'}　高値 ${draft.high != null ? Math.round(draft.high).toLocaleString() : '—'}<br>
+        安値 ${draft.low != null ? Math.round(draft.low).toLocaleString() : '—'}　終値 ${draft.close != null ? Math.round(draft.close).toLocaleString() : '—'}<br>
+        値幅 ${width}${changeStr}${candleStr}
+      </div>
+      ${draft.summary ? `<div style="font-size:13px;margin-top:8px;line-height:1.5"><b>サマリ</b><br>${esc(draft.summary)}</div>` : ''}
+      <button class="btn btn-sm" style="margin-top:8px" onclick="toggleDateModalMarketEdit()">日経データを編集</button>`;
+  } else {
+    inner = `<div class="muted" style="margin-bottom:8px">日経データなし</div>
+      <button class="btn btn-sm" onclick="toggleDateModalMarketEdit()">日経データを追加</button>`;
+  }
+
+  return `<div class="card" style="margin:0 0 14px;padding:12px 14px">
+    <div class="section-title" style="margin-bottom:8px">日経平均</div>
+    ${inner}
+  </div>`;
+}
+
+function onDateModalMarketChange(field, value) {
+  if (!_dateModalMarketDraft) return;
+  if (field === 'summary') { _dateModalMarketDraft[field] = value; }
+  else { const v = parseFloat(value); _dateModalMarketDraft[field] = isNaN(v) ? null : v; }
+}
+
+function toggleDateModalMarketEdit() {
+  _dateModalMarketEditing = !_dateModalMarketEditing;
+  renderDateModalBody();
+}
+
+function renderDateModalBody() {
+  const usedCodes = new Set(_dateModalRows.filter(r => !r.isNew).map(r => r.code));
+  let html = '';
+  html += renderDateModalMarketSection();
+  html += '<div class="section-title" style="margin:4px 0 8px">その日のスコア一覧</div>';
+  html += '<div class="date-edit-list">';
+
+  _dateModalRows.forEach((row, i) => {
+    if (row.isNew) {
+      // 新規行：銘柄選択プルダウン＋スコア入力
+      const opts = stocks
+        .filter(s => !usedCodes.has(s.code) || s.code === row.code)
+        .sort((a, b) => compareStockCode(a.code, b.code))
+        .map(s => `<option value="${esc(s.code)}"${s.code === row.code ? ' selected' : ''}>${esc(s.code)} ${esc(s.name)}</option>`)
+        .join('');
+      html += `<div class="date-edit-row">
+        <select id="drow-sel-${i}" class="date-edit-select">
+          <option value="">-- 銘柄を選択 --</option>${opts}
+        </select>
+        <input id="drow-score-${i}" class="date-edit-score" type="number"
+          step="0.5" min="0" max="5" value="${row.score ?? ''}" placeholder="0-5">
+        <button class="date-edit-del-btn mark-del" onclick="removeModalRow(${i})" title="行を削除">×</button>
+      </div>`;
+    } else {
+      const delCls = row.deleted ? ' deleted' : '';
+      html += `<div class="date-edit-row${delCls}">
+        <span class="date-edit-name" title="${esc(row.code)} ${esc(row.name)}">
+          <span style="color:var(--muted);font-family:var(--mono)">${esc(row.code)}</span> ${esc(row.name)}
+        </span>
+        <input id="drow-score-${i}" class="date-edit-score" type="number"
+          step="0.5" min="0" max="5" value="${row.score ?? ''}" placeholder="0-5"
+          ${row.deleted ? 'disabled' : ''}>
+        <button class="date-edit-del-btn ${row.deleted ? 'restore' : 'mark-del'}"
+          onclick="toggleModalRowDelete(${i})"
+          title="${row.deleted ? '削除を取消' : '削除マーク'}">${row.deleted ? '↩' : '×'}</button>
+      </div>`;
+    }
+  });
+
+  html += '</div>';
+  html += `<button class="btn btn-sm" style="margin-top:8px" onclick="addModalStockRow()">+ 銘柄を追加</button>`;
+  document.getElementById('date-modal-body').innerHTML = html;
+}
+
+function addModalStockRow() {
+  syncDateModalRows();
+  _dateModalRows.push({ code: '', name: '', score: null, deleted: false, isNew: true });
+  renderDateModalBody();
+}
+
+function removeModalRow(i) {
+  syncDateModalRows();
+  _dateModalRows.splice(i, 1);
+  renderDateModalBody();
+}
+
+function toggleModalRowDelete(i) {
+  syncDateModalRows();
+  _dateModalRows[i].deleted = !_dateModalRows[i].deleted;
+  renderDateModalBody();
+}
+
+function saveDateModal() {
+  syncDateModalRows();
+
+  // バリデーション（既存行で手動未入力＝自動値のみのまま、は許容。新規行は必須）
+  let hasError = false;
+  _dateModalRows.forEach((row, i) => {
+    if (row.deleted || !row.code) return;
+    if (row.score == null && !row.isNew) return;
+    if (!isValidScore(row.score)) {
+      const el = document.getElementById(`drow-score-${i}`);
+      if (el) el.classList.add('invalid');
+      hasError = true;
+    }
+  });
+  if (hasError) { showToast('無効なスコア値があります（0〜5 の 0.5 刻み）'); return; }
+
+  // 手動スコアを更新（自動値・相関は保持）。削除された/除外されたコードは日付から丸ごと削除
+  const existingCodes = new Set(Object.keys(scores[_dateModalDate] || {}));
+  const keptCodes = new Set();
+  _dateModalRows.forEach(row => {
+    if (row.deleted || !row.code) return;
+    keptCodes.add(row.code);
+    setManualScore(_dateModalDate, row.code, row.score);
+  });
+  existingCodes.forEach(c => { if (!keptCodes.has(c)) removeScore(_dateModalDate, c); });
+  saveScores();
+
+  // 日経データ保存（4本値・サマリのいずれかに値があれば）
+  writeMarketRecord(_dateModalDate, _dateModalMarketDraft);
+
+  closeDateModal();
+  renderViewTab();
+  showToast('保存しました');
+}
+
+function exportViewCSV() {
+  const dates = getFilteredDates();
+  if (!dates.length) { showToast('データがありません'); return; }
+
+  const codesInRange = new Set();
+  dates.forEach(d => { if(scores[d]) Object.keys(scores[d]).forEach(c => codesInRange.add(c)); });
+  const allCodes = [...codesInRange].sort(compareStockCode);
+
+  const esc2 = v => {
+    const s = String(v ?? '');
+    return (s.includes(',') || s.includes('"') || s.includes('\n'))
+      ? '"' + s.replace(/"/g,'""') + '"' : s;
+  };
+
+  const rows = [['銘柄コード','銘柄名',...dates]];
+  allCodes.forEach(code => {
+    const stock = codeIdx.get(code);
+    const row = [code, stock ? stock.name : '', ...dates.map(d => getEffectiveScore(d, code) ?? '')];
+    rows.push(row);
+  });
+
+  const csv  = rows.map(r => r.map(esc2).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], {type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'),
+    {href:url, download:'nikkei_correlation_' + todayStr().replace(/-/g,'') + '.csv'}
+  ).click();
+  URL.revokeObjectURL(url);
+  showToast('CSVを書き出しました');
+}
+
+function exportMarketCSV() {
+  const dates = getFilteredDates();
+  if (!dates.length) { showToast('データがありません'); return; }
+
+  const esc2 = v => {
+    const s = String(v ?? '');
+    return (s.includes(',') || s.includes('"') || s.includes('\n'))
+      ? '"' + s.replace(/"/g,'""') + '"' : s;
+  };
+
+  const rows = [['日付','始値','高値','安値','終値','サマリ']];
+  dates.forEach(d => {
+    const m = market[d];
+    if (!m) return;
+    rows.push([d, m.open ?? '', m.high ?? '', m.low ?? '', m.close ?? '', m.summary ?? '']);
+  });
+
+  if (rows.length === 1) { showToast('この期間に日経データがありません'); return; }
+
+  const csv  = rows.map(r => r.map(esc2).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], {type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'),
+    {href:url, download:'nikkei_market_' + todayStr().replace(/-/g,'') + '.csv'}
+  ).click();
+  URL.revokeObjectURL(url);
+  showToast('日経CSVを書き出しました');
+}
+
+// ================================================================
+// STOCKS TAB
+// ================================================================
+function renderStocksTab() {
+  const q = (document.getElementById('stocks-search')?.value || '').trim().toUpperCase();
+  const filtered = stocks.filter(s =>
+    !q || s.code.includes(q) || norm(s.name).includes(norm(q))
+  ).sort((a, b) => compareStockCode(a.code, b.code));
+
+  const wrap = document.getElementById('stocks-list-wrap');
+  if (!filtered.length) {
+    wrap.innerHTML = '<div class="muted">該当する銘柄がありません</div>';
+    return;
+  }
+
+  let html = '<table class="tbl"><thead><tr>'
+    + '<th>表示</th><th>コード</th><th>銘柄名</th><th>操作</th>'
+    + '</tr></thead><tbody>';
+
+  filtered.forEach(s => {
+    const isVisible = s.visible !== false;
+    html += `<tr${isVisible ? '' : ' class="stock-row-hidden"'}>
+      <td style="text-align:center"><input type="checkbox" ${isVisible ? 'checked' : ''} title="閲覧タブに表示" onchange="toggleStockVisible('${esc(s.code)}', this.checked)"></td>
+      <td class="code-cell">${esc(s.code)}</td>
+      <td>${esc(s.name)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm" onclick="openEditModal('${esc(s.code)}')">✎ 編集</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteStock('${esc(s.code)}')">🗑</button>
+      </td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+// 銘柄管理タブ：表示チェックボックス（閲覧タブに出すかどうか）
+function toggleStockVisible(code, visible) {
+  const s = codeIdx.get(code);
+  if (!s) return;
+  s.visible = visible;
+  saveStocks();
+  renderStocksTab();
+}
+
+// 閲覧タブ：取得チェックボックス（相関計算の対象にするかどうか）
+function toggleStockFetchTarget(code, checked) {
+  const s = codeIdx.get(code);
+  if (!s) return;
+  s.fetchTarget = checked;
+  saveStocks();
+}
+
+function addStock() {
+  const code = document.getElementById('add-code').value.trim().toUpperCase();
+  const name = document.getElementById('add-name').value.trim();
+  if (!code || !name) { showToast('コードと銘柄名を入力してください'); return; }
+  if (codeIdx.has(code)) { showToast(`${code} はすでに登録されています`); return; }
+  stocks.push({ code, name, aliases: [] });
+  saveStocks();
+  rebuildIndexes();
+  renderStocksTab();
+  document.getElementById('add-code').value = '';
+  document.getElementById('add-name').value = '';
+  showToast(`${code} ${name} を追加しました`);
+}
+
+function deleteStock(code) {
+  if (!confirm(`${code} を削除しますか？\n（スコアデータは残ります）`)) return;
+  stocks = stocks.filter(s => s.code !== code);
+  saveStocks();
+  rebuildIndexes();
+  renderStocksTab();
+  showToast(`${code} を削除しました`);
+}
+
+function openEditModal(code) {
+  const stock = codeIdx.get(code);
+  if (!stock) return;
+  editingCode = code;
+  document.getElementById('edit-code').value = stock.code;
+  document.getElementById('edit-name').value = stock.name;
+  document.getElementById('modal-title').textContent = `編集: ${code}`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function saveEdit() {
+  const newCode = document.getElementById('edit-code').value.trim().toUpperCase();
+  const newName = document.getElementById('edit-name').value.trim();
+
+  if (!newCode || !newName) { showToast('コードと銘柄名は必須です'); return; }
+
+  const stock = codeIdx.get(editingCode);
+  if (!stock) { closeModal(); return; }
+
+  // コードが変わった場合：スコアデータも付け替え
+  if (newCode !== editingCode) {
+    if (codeIdx.has(newCode)) { showToast(`${newCode} はすでに使われています`); return; }
+    Object.keys(scores).forEach(d => {
+      if (scores[d]?.[editingCode] != null) {
+        scores[d][newCode] = scores[d][editingCode];
+        delete scores[d][editingCode];
+      }
+    });
+    saveScores();
+  }
+
+  stock.code = newCode;
+  stock.name = newName;
+
+  saveStocks();
+  rebuildIndexes();
+  renderStocksTab();
+  closeModal();
+  showToast('保存しました');
+}
+
+// CSVテキストから一括インポート
+function bulkImportStocks(skipDup) {
+  const text = document.getElementById('csv-import-text').value.trim();
+  if (!text) { showToast('テキストを入力してください'); return; }
+
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && l !== 'code,name' && l !== 'コード,銘柄名');
+  let added = 0, skipped = 0, updated = 0;
+
+  lines.forEach(line => {
+    const parts = line.split(',');
+    if (parts.length < 2) return;
+    const code = parts[0].trim().toUpperCase();
+    const name = parts.slice(1).join(',').trim();
+    if (!code || !name) return;
+
+    if (codeIdx.has(code)) {
+      if (skipDup) { skipped++; }
+      else {
+        const s = codeIdx.get(code);
+        s.name = name;
+        updated++;
+      }
+    } else {
+      stocks.push({ code, name, aliases: [] });
+      added++;
+    }
+  });
+
+  saveStocks();
+  rebuildIndexes();
+  renderStocksTab();
+  document.getElementById('csv-import-text').value = '';
+  showToast(`追加:${added}件 上書き:${updated}件 スキップ:${skipped}件`);
+}
+
+// ================================================================
+// EDIT MODAL
+// ================================================================
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  editingCode = null;
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+
+// ================================================================
+// EXPORT / IMPORT
+// ================================================================
+function exportJSON() {
+  const data = { stocks, scores, market };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'),
+    {href:url, download:'nikkei_correlation_' + todayStr().replace(/-/g,'') + '.json'}
+  ).click();
+  URL.revokeObjectURL(url);
+  showToast('JSONを書き出しました');
+}
+
+function triggerImport() { document.getElementById('import-file').click(); }
+
+function handleImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    let data;
+    try { data = JSON.parse(e.target.result); }
+    catch { showToast('JSONの解析に失敗しました'); return; }
+
+    if (!data || typeof data !== 'object') { showToast('形式が正しくありません'); return; }
+
+    // マージ or 上書き を confirm で選択
+    const doMerge = confirm(
+      'インポートモードを選択してください:\n\n'
+      + '【OK】マージ — 既存データを保持し、読み込んだデータを追加・上書き\n'
+      + '（銘柄:コードで統合、スコア:日付単位で統合、同日同銘柄は読み込み側が優先）\n\n'
+      + '【キャンセル】→ 次の画面で「上書き」を選択できます'
+    );
+
+    if (doMerge) {
+      // 銘柄マスタ: コードで統合（読み込み側のnameで上書き）
+      if (Array.isArray(data.stocks)) {
+        data.stocks.forEach(ns => {
+          if (!ns.code) return;
+          const existing = codeIdx.get(ns.code);
+          if (existing) {
+            existing.name = ns.name || existing.name;
+          } else {
+            stocks.push({ code:ns.code, name:ns.name||'', aliases:[] });
+          }
+        });
+      }
+      // スコア: 日付単位で統合（同日同銘柄は読み込み側優先）
+      if (data.scores && typeof data.scores === 'object') {
+        Object.entries(data.scores).forEach(([d, dayData]) => {
+          scores[d] = Object.assign({}, scores[d] || {}, dayData);
+        });
+        migrateScoresInPlace(scores); // 旧形式（数値）のインポートデータをオブジェクト形式に変換
+      }
+      // 日経データ: 日付単位で統合（同日は読み込み側優先）
+      if (data.market && typeof data.market === 'object') {
+        Object.entries(data.market).forEach(([d, dayData]) => {
+          market[d] = Object.assign({}, market[d] || {}, dayData);
+        });
+      }
+      saveStocks(); saveScores(); saveMarket(); rebuildIndexes();
+      showToast('マージインポートしました');
+    } else {
+      const doOver = confirm(
+        '既存データを全消去して上書きしますか？\n'
+        + '【OK】上書き\n【キャンセル】インポートをキャンセル'
+      );
+      if (!doOver) { showToast('キャンセルしました'); return; }
+      if (Array.isArray(data.stocks)) {
+        stocks = data.stocks.map(s => ({ code:s.code||'', name:s.name||'', aliases:[] }));
+      }
+      if (data.scores) { scores = data.scores; migrateScoresInPlace(scores); }
+      if (data.market) market = data.market;
+      saveStocks(); saveScores(); saveMarket(); rebuildIndexes();
+      showToast('上書きインポートしました');
+    }
+    renderAll();
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// ================================================================
+// TAB SWITCHING
+// ================================================================
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('tabn-' + name).classList.add('active');
+
+  if (name === 'input' && !document.getElementById('mkt-date').value) { document.getElementById('mkt-date').value = todayStr(); loadMarketInputForm(); }
+  if (name === 'view')   { renderViewTab(); scrollTableToLatest(); }
+  if (name === 'stocks') renderStocksTab();
+}
+
+// ================================================================
+// TOAST
+// ================================================================
+let _toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ================================================================
+// HTML ESCAPE
+// ================================================================
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ================================================================
+// RENDER ALL ACTIVE TAB
+// ================================================================
+function renderAll() {
+  const active = document.querySelector('.tab-btn.active')?.id?.replace('tabn-','');
+  if (active === 'view')   renderViewTab();
+  if (active === 'stocks') renderStocksTab();
+}
+
+// ================================================================
+// KEYBOARD
+// ================================================================
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// ================================================================
+// INIT
+// ================================================================
+(function init() {
+  loadAll();
+
+  // バージョン管理マイグレーション
+  // 初回起動（stocks が空）は INITIAL_STOCKS をそのまま使う。
+  // バージョン更新時は完全上書きせず、INITIAL_STOCKS のうち未登録のコードだけを
+  // 追加するマージ方式にする（ユーザーが手動追加した銘柄を消さないため）。
+  // v3: 銘柄追加のみ（コード変更なし）のため scores はリセットしない。
+  // v5: スコアの値を数値から { manual, auto, correlation, autoCalculatedAt } 形式へ移行。
+  const CURRENT_VERSION = '5';
+  const storedVersion = localStorage.getItem('nkcp_stocks_version');
+
+  if (stocks.length === 0) {
+    stocks = INITIAL_STOCKS.map(s => ({ ...s }));
+  } else if (storedVersion !== CURRENT_VERSION) {
+    const existingCodes = new Set(stocks.map(s => s.code));
+    const missingInitialStocks = INITIAL_STOCKS.filter(s => !existingCodes.has(s.code));
+    stocks = [...stocks, ...missingInitialStocks.map(s => ({ ...s }))];
+  }
+
+  if (storedVersion !== CURRENT_VERSION) {
+    saveStocks();
+
+    migrateScoresInPlace(scores);
+    saveScores();
+
+    localStorage.setItem('nkcp_stocks_version', CURRENT_VERSION);
+  }
+
+  rebuildIndexes();
+
+  // 入力タブの日付を今日にセット
+  document.getElementById('mkt-date').value = todayStr();
+  loadMarketInputForm();
+  document.getElementById('corr-date').value = todayStr();
+
+  // 表示タブの custom range にデフォルト値
+  document.getElementById('range-from').value = addDays(todayStr(), -29);
+  document.getElementById('range-to').value   = todayStr();
+})();
+</script>
+</body>
+</html>
